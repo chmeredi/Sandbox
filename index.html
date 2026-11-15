@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Mountain Land Search</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Sans+Condensed:wght@600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<style>
+:root{
+  /* layout: one-screen tool. Map on the left, filters + ranked list + parcel sheet on the right. Single light theme (survey-sheet look). */
+  --paper:#f1f3ee; --panel:#fbfcf9; --ink:#1c2923; --muted:#5b6a62; --line:#cdd5ca;
+  --accent:#1c5a46; --accent-soft:#dbe8df; --pick:#e2a100; --trail:#7b3fa0; --water:#2a78b5; --warn:#a4541c;
+  --display:"IBM Plex Sans Condensed","Arial Narrow",sans-serif; --body:"IBM Plex Sans",system-ui,sans-serif; --mono:"IBM Plex Mono",ui-monospace,monospace;
+  color-scheme:light;
+}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{background:var(--paper);color:var(--ink);font:14px/1.45 var(--body);display:flex;flex-direction:column}
+header{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 18px;padding:10px 16px;border-bottom:1px solid var(--line);background:var(--panel)}
+h1{font:600 21px/1.1 var(--display);margin:0;letter-spacing:.01em;text-wrap:balance}
+header p{margin:0;color:var(--muted);font-size:13px}
+header b{color:var(--ink);font-variant-numeric:tabular-nums}
+.app{flex:1;min-height:0;display:grid;grid-template-columns:minmax(0,1fr) 400px}
+#map{min-height:0;background:#dfe5da}
+.side{min-height:0;display:flex;flex-direction:column;border-left:1px solid var(--line);background:var(--panel)}
+.filters{padding:12px 16px;border-bottom:1px solid var(--line);display:grid;gap:9px}
+.row{display:grid;grid-template-columns:128px 1fr 62px;align-items:center;gap:8px}
+.row label{color:var(--muted);font-size:13px}
+.row output{font:500 13px var(--mono);text-align:right;font-variant-numeric:tabular-nums}
+input[type=range]{width:100%;accent-color:var(--accent)}
+.price{color:#8a3d00;font-weight:600}
+.badge{display:inline-block;background:#b3261e;color:#fff;font:600 11px var(--mono);border-radius:4px;padding:1px 6px;margin-left:6px;vertical-align:middle}
+.sale{background:#fff1ec;border:1px solid #e6b8a6;border-radius:6px;padding:8px 10px;margin:8px 0;font-size:13px}
+.seg{display:flex;gap:0;border:1px solid var(--line);border-radius:6px;overflow:hidden}
+.seg button{flex:1;border:0;background:transparent;padding:6px 4px;font:500 13px var(--body);color:var(--muted);cursor:pointer}
+.seg button+button{border-left:1px solid var(--line)}
+.seg button[aria-pressed=true]{background:var(--accent);color:#fff}
+.checks{display:flex;flex-wrap:wrap;gap:6px 16px}
+.checks label{display:flex;gap:6px;align-items:center;cursor:pointer}
+.checks input{accent-color:var(--accent)}
+.rule-note{font-size:12px;color:var(--muted);margin:-3px 0 0}
+.bar{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:8px 16px;border-bottom:1px solid var(--line);font-size:13px}
+.bar strong{font-variant-numeric:tabular-nums}
+select{font:13px var(--body);padding:4px 6px;border:1px solid var(--line);border-radius:6px;background:#fff;color:var(--ink)}
+.scroll{flex:1;min-height:0;overflow:auto}
+.item{display:grid;grid-template-columns:44px 1fr auto;gap:10px;align-items:center;width:100%;text-align:left;border:0;border-bottom:1px solid var(--line);background:transparent;padding:8px 16px;cursor:pointer;font:inherit;color:inherit}
+.item:hover{background:var(--accent-soft)}
+.item[aria-current=true]{background:#fbf1cf}
+.pill{font:500 13px var(--mono);text-align:center;border-radius:5px;padding:3px 0;color:#fff;font-variant-numeric:tabular-nums}
+.item .t{font-weight:500}
+.item .s{color:var(--muted);font-size:12.5px}
+.tag{font:500 11px var(--mono);color:var(--muted);border:1px solid var(--line);border-radius:4px;padding:1px 5px}
+.more{margin:12px 16px;padding:8px;border:1px solid var(--line);border-radius:6px;background:#fff;cursor:pointer;font:500 13px var(--body);width:calc(100% - 32px)}
+#detail{border-bottom:2px solid var(--pick);padding:12px 16px;display:none;background:#fffdf5}
+#detail.on{display:block}
+#detail h2{font:600 18px/1.2 var(--display);margin:0}
+.dh{display:flex;justify-content:space-between;gap:8px;align-items:flex-start}
+.dh button{border:1px solid var(--line);background:#fff;border-radius:6px;padding:4px 9px;cursor:pointer;font:500 13px var(--body)}
+.sub{color:var(--muted);font-size:12.5px;margin:2px 0 8px;font-family:var(--mono)}
+.parts{display:grid;gap:3px;margin:8px 0 10px}
+.part{display:grid;grid-template-columns:104px 1fr 44px;gap:8px;align-items:center;font-size:12.5px}
+.part i{display:block;height:7px;border-radius:4px;background:var(--accent-soft);overflow:hidden}
+.part i b{display:block;height:100%;background:var(--accent)}
+.part span:last-child{font:12px var(--mono);text-align:right}
+dl{display:grid;grid-template-columns:104px 1fr;gap:5px 8px;margin:0;font-size:13px}
+dt{color:var(--muted)}dd{margin:0}
+.flag{color:var(--warn);font-size:12.5px;margin:8px 0 0}
+.links{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
+.links a{color:var(--accent);font-weight:500;border:1px solid var(--accent);border-radius:6px;padding:4px 9px;text-decoration:none}
+.links a:hover{background:var(--accent);color:#fff}
+details.about{padding:10px 16px;font-size:12.5px;color:var(--muted);border-top:1px solid var(--line)}
+details.about summary{cursor:pointer;color:var(--ink);font-weight:500}
+details.about li{margin:4px 0}
+.legend{display:flex;flex-wrap:wrap;gap:4px 12px;font-size:12px;color:var(--muted);padding:6px 16px;border-bottom:1px solid var(--line)}
+.legend span::before{content:"";display:inline-block;width:14px;height:3px;margin-right:5px;vertical-align:middle;background:var(--c)}
+.town{font:600 12px var(--display);color:#26332d;text-shadow:0 0 3px #fff,0 0 3px #fff,0 0 2px #fff;white-space:nowrap}
+button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,summary:focus-visible{outline:2px solid var(--pick);outline-offset:2px}
+#status{padding:24px 16px;color:var(--muted)}
+@media (max-width:820px){
+  .app{grid-template-columns:1fr;grid-template-rows:46% 1fr}
+  .side{border-left:0;border-top:1px solid var(--line)}
+  .row{grid-template-columns:112px 1fr 58px}
+}
+</style>
+</head>
+<body>
+<header>
+  <h1>Mountain Land Search</h1>
+  <p id="summary">Loading…</p>
+</header>
+<div class="app">
+  <div id="map" aria-label="Map of candidate parcels"></div>
+  <div class="side">
+    <div class="filters">
+      <div class="row" style="grid-template-columns:128px 1fr"><label for="f-co">County</label><select id="f-co"><option value="-1">All counties</option></select></div>
+      <div class="checks">
+        <label><input type="checkbox" id="f-sale"> For sale only</label>
+        <label><input type="checkbox" id="f-rules" checked> Apply our access rules</label>
+        <label><input type="checkbox" id="f-stream"> Year-round stream</label>
+        <label><input type="checkbox" id="f-star"> Starred only</label>
+      </div>
+      <p class="rule-note" id="rule-note"></p>
+      <div class="row" id="r-trail"><label for="f-trail">Trail within</label><input type="range" id="f-trail" min="3" max="20" step="1" value="15"><output id="o-trail"></output></div>
+      <div class="row" id="r-groc"><label for="f-groc">Grocery within</label><input type="range" id="f-groc" min="5" max="30" step="1" value="20"><output id="o-groc"></output></div>
+      <div class="row"><label for="f-ac">Acres at least</label><input type="range" id="f-ac" min="10" max="200" step="5" value="10"><output id="o-ac"></output></div>
+      <div class="row"><label for="f-home">Homesites at least</label><input type="range" id="f-home" min="0" max="12" step="1" value="4"><output id="o-home"></output></div>
+      <div class="row"><label for="f-dur">Durham drive up to</label><input type="range" id="f-dur" min="120" max="300" step="5" value="300"><output id="o-dur"></output></div>
+    </div>
+    <div class="bar"><span><strong id="count">0</strong> parcels match<span id="capnote"></span></span>
+      <label>Sort <select id="sort"><option value="sc">Score</option><option value="ac">Acres</option><option value="tm">Trail time</option><option value="hc">Homesites</option><option value="lp">List price</option></select></label></div>
+    <div class="legend"><span style="--c:#f2d14a">parcel (brighter = higher score)</span><span style="--c:#ff5a3c">listed for sale</span><span style="--c:#d58cff">public trail</span></div>
+    <div class="scroll" id="scroll">
+      <div id="detail"></div>
+      <div id="status">Loading parcels…</div>
+      <div id="list"></div>
+      <details class="about">
+        <summary>How to read these numbers</summary>
+        <ul>
+          <li><b>Score</b> (0 to 100) weights trail access 30, buildable ground 25, water 15, size 10, grocery 8, Durham drive 7, road access 5, minus up to 5 for flood zone.</li>
+          <li><b>Access rules</b>: a public trail within a 10-minute drive (15 minutes for 40+ acres) and a supermarket within 20 minutes.</li>
+          <li><b>For sale</b> comes from a weekly listings feed (RentCast), matched by map position and acreage. It misses listings the feed does not carry, and a match marked "acreage differs" may be a neighbouring or partial tract. Red dots are 10+ acre listings that matched no screened parcel.</li>
+          <li><b>Homesites</b> counts patches of ground at 15% slope or less, outside the FEMA flood zone, about one per acre. It is a terrain screen, not a perc test or a survey.</li>
+          <li><b>Drive times</b> are estimates from road type and length; treat them as plus or minus 20%.</li>
+          <li><b>Trails</b> are named trail systems of a mile or more from OpenStreetMap. Public access is not verified.</li>
+          <li><b>Year-round stream</b> follows the USGS classification, which is uneven between counties (Madison and Buncombe have few streams marked year-round).</li>
+          <li><b>Acres</b> are measured from the mapped outline. Carroll County has no tax value or sale year yet.</li>
+          <li>Stars are saved in this browser only. This is a screening aid built from public records, not an appraisal or an offer.</li>
+        </ul>
+        <p id="built"></p>
+      </details>
+    </div>
+  </div>
+</div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script>
+(function(){
+"use strict";
+var $=function(id){return document.getElementById(id)};
+var D=null,C=null,N=0,sel=-1,shown=150,matches=[],selLayer=null,CAP=5000;
+var F={};var stars={};
+try{(JSON.parse(localStorage.getItem("landsearch-stars")||"[]")).forEach(function(k){stars[k]=1})}catch(e){}
+function saveStars(){try{localStorage.setItem("landsearch-stars",JSON.stringify(Object.keys(stars)))}catch(e){}}
+var map=L.map("map",{preferCanvas:true,minZoom:7,maxZoom:19});
+var sat=L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",{maxZoom:19,attribution:"Imagery © Esri, Maxar, Earthstar Geographics"}).addTo(map);
+var topo=L.tileLayer("https://basemap.nationalmap.gov/arcgis/rest/services/USGSTopo/MapServer/tile/{z}/{y}/{x}",{maxZoom:19,maxNativeZoom:16,attribution:"USGS The National Map"});
+var street=L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png",{maxZoom:19,attribution:"© OpenStreetMap contributors"});
+var trailLayer=L.layerGroup().addTo(map),otherLayer=L.layerGroup().addTo(map),countyLayer=L.layerGroup().addTo(map),parcelLayer=L.layerGroup().addTo(map);
+L.control.layers({"Satellite":sat,"Topo map":topo,"Street map":street},{"Parcels":parcelLayer,"Public trails":trailLayer,"Other land listings":otherLayer,"County lines":countyLayer},{collapsed:window.innerWidth<820}).addTo(map);
+map.attributionControl.setPrefix("").addAttribution("Parcels: NC OneMap, VGIN · Listings: RentCast");
+map.setView([36.2,-81.6],9);
+function ll(f){var o=[];for(var i=0;i<f.length;i+=2)o.push([f[i+1],f[i]]);return o}
+function fmt(n){return n==null?"–":Number(n).toLocaleString("en-US")}
+function money(n){return n==null?"–":"$"+Number(n).toLocaleString("en-US")}
+function mins(m){if(m==null)return "–";m=Math.round(m);return m<60?m+" min":Math.floor(m/60)+" h "+(m%60<10?"0":"")+(m%60)+" min"}
+function esc(s){return String(s==null?"":s).replace(/[&<>"]/g,function(c){return{"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]})}
+function title(s){return String(s||"").toLowerCase().replace(/\b[a-z]/g,function(c){return c.toUpperCase()})}
+function color(sc){var t=Math.max(0,Math.min(1,(sc-35)/55));var a=[120,150,110],b=[255,224,60];return "rgb("+a.map(function(v,i){return Math.round(v+(b[i]-v)*t)}).join(",")+")"}
+function readFilters(){
+  F.co=+$("f-co").value;F.sale=$("f-sale").checked;F.rules=$("f-rules").checked;F.stream=$("f-stream").checked;F.star=$("f-star").checked;
+  F.trail=+$("f-trail").value;F.groc=+$("f-groc").value;F.ac=+$("f-ac").value;F.home=+$("f-home").value;F.dur=+$("f-dur").value;
+  $("o-trail").textContent=F.trail+" min";$("o-groc").textContent=F.groc+" min";$("o-ac").textContent=F.ac+" ac";
+  $("o-home").textContent=F.home;$("o-dur").textContent=F.dur>=300?"any":mins(F.dur);
+  $("r-trail").style.display=$("r-groc").style.display=F.rules?"none":"grid";
+  $("rule-note").textContent=F.rules?"Trail within 10 min (15 min if 40+ acres) and grocery within 20 min.":"Rules off: set your own limits below.";
+}
+function apply(){
+  if(!D)return;readFilters();var c=D.cols;matches=[];
+  for(var i=0;i<N;i++){
+    if(F.co>=0&&c.co[i]!==F.co)continue;
+    if(F.sale&&!c.fs[i])continue;
+    if(F.rules){if(!c.ok[i])continue}else if(!(c.tm[i]<=F.trail)||!(c.gm[i]<=F.groc))continue;
+    if(c.ac[i]<F.ac)continue;
+    if((c.hc[i]||0)<F.home)continue;
+    if(F.dur<300&&c.dm[i]>F.dur)continue;
+    if(F.stream&&(c.ps[i]||0)<30)continue;
+    if(F.star&&!stars[c.id[i]])continue;
+    matches.push(i);
+  }
+  var k=$("sort").value,dir=(k==="tm"||k==="lp")?1:-1;
+  matches.sort(function(a,b){var x=c[k][a],y=c[k][b];if(k==="lp"){x=x==null?1e12:x;y=y==null?1e12:y}return dir*((x||0)-(y||0))||c.sc[b]-c.sc[a]});
+  $("count").textContent=fmt(matches.length);$("capnote").textContent=matches.length>CAP?" (map shows the first "+fmt(CAP)+")":"";
+  shown=150;drawList();drawParcels();
+}
+function drawList(){
+  var c=D.cols,h="";
+  matches.slice(0,shown).forEach(function(i){
+    var water=(c.ps[i]||0)>=30?"stream":((c.pc[i]||0)>0?"pond":"");
+    h+='<button class="item" data-i="'+i+'"'+(i===sel?' aria-current="true"':"")+'><span class="pill" style="background:#1c5a46">'+c.sc[i].toFixed(0)+'</span><span><span class="t">'+fmt(c.ac[i])+' acres'+(stars[c.id[i]]?" ★":"")+(c.fs[i]?'<span class="badge">FOR SALE</span> <span class="price">'+money(c.lp[i])+'</span>':"")+'</span><br><span class="s">'+mins(c.tm[i])+' to '+esc(c.tn[i]||"trail")+' · '+(c.hc[i]||0)+' homesites'+(water?" · "+water:"")+'</span></span><span class="tag">'+D.meta.counties[c.co[i]]+'</span></button>';
+  });
+  if(matches.length>shown)h+='<button class="more" id="more">Show '+Math.min(150,matches.length-shown)+' more</button>';
+  $("list").innerHTML=h;$("status").style.display=matches.length?"none":"";if(!matches.length)$("status").textContent="No parcels match. Loosen a filter.";
+}
+function drawParcels(){
+  parcelLayer.clearLayers();var c=D.cols,n=Math.min(matches.length,CAP);
+  for(var k=n-1;k>=0;k--){(function(i){
+    var fs=c.fs[i];
+    var p=L.polygon(D.geom[i].map(ll),{color:fs?"#ff5a3c":color(c.sc[i]),weight:fs?2.5:1.3,fillColor:fs?"#ff5a3c":color(c.sc[i]),fillOpacity:fs?.3:.22});
+    p.on("click",function(){select(i,false)});p.bindTooltip(fmt(c.ac[i])+" ac · score "+c.sc[i].toFixed(0)+(fs?" · for sale "+money(c.lp[i]):""),{sticky:true});
+    parcelLayer.addLayer(p);})(matches[k])}
+  mark();
+}
+function mark(){
+  if(selLayer){map.removeLayer(selLayer);selLayer=null}
+  if(sel>=0)selLayer=L.polygon(D.geom[sel].map(ll),{color:"#ffffff",weight:4,fill:false,interactive:false,dashArray:"8 5"}).addTo(map);
+}
+function select(i,fly){
+  sel=i;mark();drawDetail();drawList();
+  if(fly&&i>=0)map.fitBounds(L.polygon(D.geom[i].map(ll)).getBounds().pad(0.8),{maxZoom:16});
+  $("scroll").scrollTop=0;
+}
+function drawDetail(){
+  var el=$("detail");if(sel<0){el.className="";el.innerHTML="";return}
+  var c=D.cols,i=sel,w=D.meta.weights,co=c.co[i],cn=D.meta.counties[co],stt=D.meta.states[co];
+  var names={trail:"Trail access",build:"Buildable ground",water:"Water",size:"Size",grocery:"Grocery",durham:"Durham drive",road:"Road access"};
+  var parts=Object.keys(w).map(function(k){var v=c["s_"+k][i];return '<div class="part"><span>'+names[k]+'</span><i><b style="width:'+v+'%"></b></i><span>'+(v*w[k]/100).toFixed(0)+"/"+w[k]+'</span></div>'}).join("");
+  var water=[];
+  if((c.ps[i]||0)>=30)water.push(fmt(Math.round(c.ps[i]*3.281))+" ft of year-round stream on or along it"+(c.sn[i]?" ("+esc(c.sn[i])+")":""));
+  else if(c.pd[i]!=null)water.push("nearest year-round stream "+fmt(Math.round(c.pd[i]*3.281))+" ft away");
+  if((c.ss[i]||0)>=30)water.push(fmt(Math.round(c.ss[i]*3.281))+" ft seasonal");
+  if((c.pc[i]||0)>0)water.push(c.pc[i]+" pond"+(c.pc[i]>1?"s":""));
+  var surf=["surface not recorded","paved","paved (main road)","unpaved"][c.rs[i]];
+  var rec=stt==="NC"?'<dt>County record</dt><dd>land assessed at '+money(c.lv[i])+(c.lv[i]&&!c.mm[i]?" ("+money(Math.round(c.lv[i]/c.ac[i]))+"/acre)":"")+(c.iv[i]>0?"; buildings "+money(c.iv[i]):"")+"; "+(c.st[i]===1?"has a structure":"no structure recorded")+(c.sy[i]?"; last sale "+c.sy[i]:"")+(c.ad[i]?"<br>"+esc(title(c.ad[i])):"")+'</dd>':'<dt>County record</dt><dd>tax value and sale year not yet loaded for this county</dd>';
+  var sale="";
+  if(c.fs[i])sale='<div class="sale"><b>Listed for sale: '+money(c.lp[i])+'</b>'+(c.lp[i]&&c.lac[i]?" ("+money(Math.round(c.lp[i]/c.lac[i]))+"/acre)":"")+'<br>'+esc(c.lad[i])+' · listing says '+fmt(c.lac[i])+' acres · listed '+esc(c.ld[i]||"date unknown")+(c.ldm[i]!=null?" ("+fmt(c.ldm[i])+" days on market)":"")+(c.lm[i]?"<br>MLS: "+esc(c.lm[i]):"")+(c.lq[i]?"":'<br><span class="flag">Acreage differs from this outline: may be a neighbouring or partial tract.</span>')+'</div>';
+  var q=encodeURIComponent((c.fs[i]?c.lad[i]:((c.ad[i]?title(c.ad[i]):(c.rn[i]||""))+" "+cn+" County "+stt))+" land for sale"+(c.fs[i]?"":" "+Math.round(c.ac[i])+" acres"));
+  var gm="https://www.google.com/maps/@?api=1&map_action=map&center="+c.la[i]+","+c.lo[i]+"&zoom=16&basemap=satellite";
+  var id=c.id[i];
+  el.className="on";
+  el.innerHTML='<div class="dh"><h2>'+fmt(c.ac[i])+' acres, '+cn+' County</h2><span><button id="star">'+(stars[id]?"★ Starred":"☆ Star")+'</button> <button id="close" aria-label="Close parcel">Close</button></span></div>'
+   +'<p class="sub">Parcel '+esc(c.pid[i]||id)+' · score '+c.sc[i].toFixed(1)+(c.ok[i]?"":" · outside access rules")+'</p>'+sale
+   +'<div class="parts">'+parts+'</div><dl>'
+   +'<dt>Trail</dt><dd>'+mins(c.tm[i])+' to '+esc(c.tn[i]||"nearest public trail")+'</dd>'
+   +'<dt>Grocery</dt><dd>'+mins(c.gm[i])+' to '+esc(title(c.gn[i]))+'</dd>'
+   +'<dt>Durham</dt><dd>'+mins(c.dm[i])+'</dd>'
+   +'<dt>Homesites</dt><dd>room for about '+(c.hc[i]||0)+'; '+fmt(c.ga[i])+' gentle acres (15% slope or less), '+fmt(c.ma[i])+' under 25%; largest gentle patch '+fmt(c.lg[i])+' ac</dd>'
+   +'<dt>Terrain</dt><dd>average slope '+fmt(c.sl[i])+'%; '+fmt(c.e0[i])+' to '+fmt(c.e1[i])+' ft; '+fmt(c.sf[i])+'% of slopes face south</dd>'
+   +'<dt>Water</dt><dd>'+(water.join("; ")||"no mapped stream within about 2 miles")+'</dd>'
+   +'<dt>Flood zone</dt><dd>'+((c.fa[i]||0)>0.05?fmt(c.fa[i])+" acres in FEMA flood zone":"none mapped")+'</dd>'
+   +'<dt>Road</dt><dd>'+(c.rd[i]<=30?"touches ":fmt(Math.round(c.rd[i]*3.281))+" ft from ")+esc(c.rn[i]||"an unnamed public road")+'; '+surf+'</dd>'
+   +rec+'</dl>'
+   +(c.mm[i]?'<p class="flag">County record acreage does not match this outline, so the assessed value may cover different land.</p>':"")
+   +'<div class="links"><a href="'+gm+'" target="_blank" rel="noopener">Open in Google Maps</a><a href="https://www.google.com/search?q='+q+'" target="_blank" rel="noopener">'+(c.fs[i]?"Find this listing":"Look for a listing")+'</a></div>';
+  $("star").onclick=function(){if(stars[id])delete stars[id];else stars[id]=1;saveStars();drawDetail();drawList()};
+  $("close").onclick=function(){select(-1,false)};
+}
+["f-co","f-sale","f-rules","f-stream","f-star","f-trail","f-groc","f-ac","f-home","f-dur","sort"].forEach(function(id){$(id).addEventListener("input",apply)});
+$("f-co").addEventListener("change",function(){var v=+$("f-co").value;if(v<0){fitAll();return}var b=null;C.counties.forEach(function(x){if(x[0]===D.meta.counties[v])b=L.polygon(x[1].map(ll)).getBounds()});if(b)map.fitBounds(b)});
+$("list").addEventListener("click",function(e){var b=e.target.closest("button");if(!b)return;if(b.id==="more"){shown+=150;drawList();return}select(+b.dataset.i,true)});
+function fitAll(){var b=D.meta.bounds;map.fitBounds([[b[1],b[0]],[b[3],b[2]]])}
+readFilters();
+Promise.all(["parcels.json","context.json"].map(function(u){return fetch(u).then(function(r){if(!r.ok)throw new Error(u);return r.json()})})).then(function(r){
+  D=r[0];C=r[1];N=D.cols.id.length;
+  var tot=0,ok=0,fs=0;D.meta.counties.forEach(function(n,k){var m=D.meta.counts[n];tot+=m.candidates;ok+=m.meet_rules;fs+=m.for_sale;var o=document.createElement("option");o.value=k;o.textContent=n+", "+D.meta.states[k]+" ("+fmt(m.meet_rules)+")";$("f-co").appendChild(o)});
+  $("summary").innerHTML="<b>"+fmt(tot)+"</b> parcels of 10+ acres screened in "+D.meta.counties.length+" counties · <b>"+fmt(ok)+"</b> meet our access rules · <b>"+fmt(fs)+"</b> matched to an active listing";
+  $("built").textContent="Data built "+D.meta.built+"; listings as of "+(D.meta.listing_day||"n/a")+". Parcels more than 20 minutes from a trail or 30 from a grocery are left off unless listed for sale.";
+  C.counties.forEach(function(x){L.polygon(x[1].map(ll),{color:"#ffffff",weight:2,dashArray:"7 5",fill:false,interactive:false}).addTo(countyLayer)});
+  L.polyline(C.trails.map(ll),{color:"#d58cff",weight:2,dashArray:"5 4",interactive:false}).addTo(trailLayer);
+  C.other_listings.forEach(function(g){L.circleMarker([g[1],g[0]],{radius:5,color:"#fff",weight:1.5,fillColor:"#ff5a3c",fillOpacity:1}).bindPopup("<b>"+money(g[3])+"</b> · "+fmt(g[4])+" acres<br>"+esc(g[2])+"<br>listed "+esc(g[5]||"date unknown")+"<br>Not matched to a screened parcel.").addTo(otherLayer)});
+  fitAll();apply();
+}).catch(function(e){$("status").textContent="Could not load the parcel data ("+e.message+"). Reload the page to try again."});
+})();
+</script>
+</body>
+</html>
