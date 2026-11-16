@@ -116,12 +116,13 @@ button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,su
       <div id="detail"></div>
       <div id="status">Loading parcels…</div>
       <div id="list"></div>
+      <details class="about" id="unplaced" style="display:none"><summary id="unplaced-sum"></summary><ul id="unplaced-list"></ul></details>
       <details class="about">
         <summary>How to read these numbers</summary>
         <ul>
           <li><b>Score</b> (0 to 100) weights trail access 30, buildable ground 25, water 15, size 10, grocery 8, Durham drive 7, road access 5, minus up to 5 for flood zone.</li>
           <li><b>Access rules</b>: a public trail within a 10-minute drive (15 minutes for 40+ acres) and a supermarket within 20 minutes.</li>
-          <li><b>For sale</b> comes from a weekly listings feed (RentCast), matched by map position and acreage. It misses listings the feed does not carry, and a match marked "acreage differs" may be a neighbouring or partial tract. Red dots are 10+ acre listings that matched no screened parcel.</li>
+          <li><b>For sale</b> comes from a listings feed (RentCast, refreshed about every two weeks), matched by map position and acreage, plus emailed LandWatch and Zillow alerts matched by road and acreage. It misses listings the feed does not carry, and a match marked "acreage differs" may be a neighbouring or partial tract. Red dots are 10+ acre listings that matched no screened parcel.</li>
           <li><b>Homesites</b> counts patches of ground at 15% slope or less, outside the FEMA flood zone, about one per acre. It is a terrain screen, not a perc test or a survey.</li>
           <li><b>Drive times</b> are estimates from road type and length; treat them as plus or minus 20%.</li>
           <li><b>Trails</b> are named trail systems of a mile or more from OpenStreetMap. Public access is not verified.</li>
@@ -259,6 +260,9 @@ Promise.all(["parcels.json","context.json"].map(function(u){return fetch(u).then
   C.counties.forEach(function(x){L.polygon(x[1].map(ll),{color:"#ffffff",weight:2,dashArray:"7 5",fill:false,interactive:false}).addTo(countyLayer)});
   L.polyline(C.trails.map(ll),{color:"#d58cff",weight:2,dashArray:"5 4",interactive:false}).addTo(trailLayer);
   C.other_listings.forEach(function(g){L.circleMarker([g[1],g[0]],{radius:5,color:"#fff",weight:1.5,fillColor:"#ff5a3c",fillOpacity:1}).bindPopup("<b>"+money(g[3])+"</b> · "+fmt(g[4])+" acres<br>"+esc(g[2])+"<br>listed "+esc(g[5]||"date unknown")+"<br>Not matched to a screened parcel.").addTo(otherLayer)});
+  var up=C.unplaced||[];
+  if(up.length){$("unplaced").style.display="";$("unplaced-sum").textContent="Emailed listings not yet placed on the map ("+up.length+")";
+    $("unplaced-list").innerHTML=up.map(function(u){var t=esc(u[1])+", "+esc(u[0])+" County: "+money(u[2])+", "+fmt(u[3])+" acres (seen "+esc(u[4])+", "+esc(u[5])+")";return "<li>"+(/^https:\/\//.test(u[6])?'<a href="'+esc(u[6])+'" target="_blank" rel="noopener">'+t+"</a>":t)+"</li>"}).join("")}
   fitAll();apply();
 }).catch(function(e){$("status").textContent="Could not load the parcel data ("+e.message+"). Reload the page to try again."});
 })();
